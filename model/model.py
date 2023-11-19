@@ -13,13 +13,13 @@ class Model:
             self.model = model
     def __call__(self):
         out = self.model.encode(self.prompt, normalize_embeddings=True)
-        y = []
+        y = [out]
         sum = 0
         vlowF = './model/iso_forest_vlow'
-        lowF = 'iso_forest_low'
-        medF = 'iso_forest_med'
-        highF = 'iso_forest_high'
-        vhighF = 'iso_forest_vhigh'
+        lowF = './model/iso_forest_low'
+        medF = './model/iso_forest_med'
+        highF = './model/iso_forest_high'
+        vhighF = './model/iso_forest_vhigh'
         for i in range(5):
             iso_forest_vlow = pickle.load(open((vlowF + str(i) + '.sav'), 'rb'))
             iso_forest_low = pickle.load(open((lowF + str(i) + '.sav'), 'rb'))

@@ -26,7 +26,7 @@ maxAllowedCache = 100
 
 @app.route("/")
 def hello():
-    return "now with prisma!"
+    return "redis back up"
 
 @app.route("/sign_up", methods=["POST"])
 async def sign_up():
@@ -154,8 +154,8 @@ async def delete_api_key():
 
 @app.route("/get_intent", methods=["POST"])
 def get_intent():
-    encoded = request.json["jwt"]
-    decoded = jwt.decode(encoded, os.getenv("JWT_SECRET"), algorithms=["HS256"])
+    # encoded = request.json["jwt"]
+    # decoded = jwt.decode(encoded, os.getenv("JWT_SECRET"), algorithms=["HS256"])
     model = Model(request.json["prompt"], model=transformer)
     # out = r.get(model.hash())
     # if out != None:
@@ -167,7 +167,7 @@ def get_intent():
     #     r.delete(next(r.scan()))
     # r.set(model.hash(), out)
     return dumps({
-        "certaintyValue": out
+        "certaintyValue": out[0]
     })
 
 
