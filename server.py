@@ -157,15 +157,17 @@ def get_intent():
     # encoded = request.json["jwt"]
     # decoded = jwt.decode(encoded, os.getenv("JWT_SECRET"), algorithms=["HS256"])
     model = Model(request.json["prompt"], model=transformer)
-    # out = r.get(model.hash())
-    # if out != None:
-    #     return dumps({
-    #         "certaintyValue": out
-    #     })
+    # try:
+    #     out = r.get(model.hash())
+    #     if out != None:
+    #         return dumps({
+    #             "certaintyValue": out
+    #         })
+    #     if r.dbsize() >= maxAllowedCache:
+    #         r.delete(next(r.scan()))
+    #     r.set(model.hash(), out)
+    # finally:
     out = model()
-    # if r.dbsize() >= maxAllowedCache:
-    #     r.delete(next(r.scan()))
-    # r.set(model.hash(), out)
     return dumps({
         "certaintyValue": out[0]
     })
