@@ -9,6 +9,7 @@ from json import dumps
 import dotenv
 import jwt
 from uuid import uuid4
+import redis
 import os
 
 
@@ -16,12 +17,10 @@ dotenv.load_dotenv()
 app = Flask(__name__)
 transformer = SentenceTransformer("all-MiniLM-L6-v2")
 prisma = Prisma()
-# r = redis.Redis(
-#   host='redis-18554.c284.us-east1-2.gce.cloud.redislabs.com',
-#   port=18554,
-#   password=os.getenv("REDIS_PW"),
-#   decode_responses=True
-# )
+r = redis.Redis(
+  host='redis-16537.c10.us-east-1-2.ec2.cloud.redislabs.com',
+  port=16537,
+  password=os.getenv("REDIS_PW"))
 maxAllowedCache = 100
 
 @app.route("/")
@@ -157,20 +156,20 @@ def get_intent():
     # encoded = request.json["jwt"]
     # decoded = jwt.decode(encoded, os.getenv("JWT_SECRET"), algorithms=["HS256"])
     model = Model(request.json["prompt"], model=transformer)
-    # try:
-    #     out = r.get(model.hash())
-    #     if out != None:
-    #         return dumps({
-    #             "certaintyValue": out
-    #         })
-    #     if r.dbsize() >= maxAllowedCache:
-    #         r.delete(next(r.scan()))
-    #     r.set(model.hash(), out)
-    # finally:
-    out = model()
-    return dumps({
-        "certaintyValue": out[0]
-    })
+    try:
+        out = r.get(model.hash())
+        if out != None:
+            return dumps({
+                "certaintyValue": out
+            })
+        if r.dbsize() >= maxAllowedCache:
+            r.delete(next(r.scan()))
+        r.set(model.hash(), out)
+    finally:
+        out = model()
+        return dumps({
+            "certaintyValue": out[0]
+        })
 
 
 if (__name__ == "__main__"):
