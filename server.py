@@ -26,7 +26,7 @@ maxAllowedCache = 100
 
 @app.route("/")
 def hello():
-    return "hello"
+    return "now with prisma!"
 
 @app.route("/sign_up", methods=["POST"])
 async def sign_up():
