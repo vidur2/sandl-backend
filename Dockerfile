@@ -8,4 +8,4 @@ RUN pip install -r requirements.txt
 RUN pip install flask[async]
 COPY . .
 ENV FLASK_APP=server.py
-CMD ["sh", "-c", "prisma generate && flask run --host 0.0.0.0 --port $PORT"]
+CMD ["sh", "-c", "python3 -m prisma generate && flask run --host 0.0.0.0 --port $PORT"]
