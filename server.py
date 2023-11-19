@@ -76,7 +76,7 @@ async def login():
     elif (user == None):
         return dumps({
             'error': 'user not found'
-        }), 400
+        }), 405
     else:
         return dumps({
             "error": "password not correct"
