@@ -4,26 +4,24 @@ import sys
 from sentence_transformers import SentenceTransformer
 sys.path.append("model/")
 from model import Model
+from prisma import Prisma
 from json import dumps
 import dotenv
 import jwt
 from uuid import uuid4
-import redis
 import os
-import psycopg2
-import redis
 
 
 dotenv.load_dotenv()
 app = Flask(__name__)
 transformer = SentenceTransformer("all-MiniLM-L6-v2")
 prisma = Prisma()
-r = redis.Redis(
-  host='redis-18554.c284.us-east1-2.gce.cloud.redislabs.com',
-  port=18554,
-  password=os.getenv("REDIS_PW"),
-  decode_responses=True
-)
+# r = redis.Redis(
+#   host='redis-18554.c284.us-east1-2.gce.cloud.redislabs.com',
+#   port=18554,
+#   password=os.getenv("REDIS_PW"),
+#   decode_responses=True
+# )
 maxAllowedCache = 100
 
 @app.route("/")
@@ -34,25 +32,20 @@ def hello():
 async def sign_up():
     email = request.json["email"]
     password = request.json["password"]
-    conn = psycopg2.connect(database="postgres",
-                        host="34.31.33.98",
-                        user="postgres",
-                        password="IsbgVhMCgVDuV4")
-    cursor = conn.cursor()
-    uid = -1
-    valid = False
+    await prisma.connect()
+    user = None
     try:
-        cursor.execute(f"INSERT INTO \"User\" (email, password) VALUES ('{email}', '{password}')")
-        conn.commit()
-        cursor.execute(f"SELECT id FROM \"User\" WHERE email='{email}'")
-        #fetched = fetched[0][1:len(fetched[0]) - 1].split(",")
-        uid = cursor.fetchone()[0]
-        valid = True
+        user = await prisma.user.create(
+            data={
+                'email': email,
+                'password': password
+            }
+        )
     finally:
-        conn.close()
+        await prisma.disconnect()
 
-    if (valid):
-        encoded = jwt.encode({ "id": uid}, os.getenv("JWT_SECRET"))
+    if (user != None):
+        encoded = jwt.encode({ "id": user.id }, os.getenv("JWT_SECRET"))
         return dumps({
             'jwt': encoded
         })
@@ -65,30 +58,21 @@ async def sign_up():
 async def login():
     email = request.json["email"]
     password = request.json["password"]
-    user_pw = ""
-    conn = psycopg2.connect(database="postgres",
-                        host="34.31.33.98",
-                        user="postgres",
-                        password="IsbgVhMCgVDuV4")
-    cursor = conn.cursor()
-    fetched = False
-    uid = -1
+    await prisma.connect()
+    user = None
     try:
-        cursor.execute(f"SELECT (id, password) FROM \"User\" WHERE email='{request.json['email']}'")
-        fetched = cursor.fetchone()
-        fetched = fetched[0][1:len(fetched[0]) - 1].split(",")
-        user_pw = fetched[1]
-        uid = fetched[0]
-        fetched = True
+        user = await prisma.user.find_unique_or_raise(where={
+                'email': email,
+            })
     finally:
-        conn.close()
+        await prisma.disconnect()
 
-    if (fetched and user_pw == password):
-        encoded = jwt.encode({ "id": uid }, os.getenv("JWT_SECRET"), algorithm="HS256")
+    if (user != None and user.password == password):
+        encoded = jwt.encode({ "id": user.id }, os.getenv("JWT_SECRET"), algorithm="HS256")
         return dumps({
             'jwt': encoded
         })
-    elif (not fetched):
+    elif (user == None):
         return dumps({
             'error': 'user not found'
         }), 405
@@ -101,70 +85,70 @@ async def login():
 async def get_api_keys():
     encoded = request.json["jwt"]
     decoded = jwt.decode(encoded, os.getenv("JWT_SECRET"), algorithms=["HS256"])
-    conn = psycopg2.connect(database="postgres",
-                        host="34.31.33.98",
-                        user="postgres",
-                        password="IsbgVhMCgVDuV4")
-    cursor = conn.cursor()
+    await prisma.connect()
     keys = []
     try:
-        cursor.execute("SELECT guid FROM \"ApiKeys\" WHERE \"userId\" = '" + decoded["id"] + "'")
-        keys = cursor.fetchall()
+        keys = await prisma.apikeys.find_many(where={
+            "userId": decoded["id"]
+        })
     finally:
-        conn.close()
+        await prisma.disconnect()
     return dumps({
-        "keys": [key[0] for key in keys]
+        "keys": [key.guid for key in keys]
     })
 
 @app.route("/add_api_key", methods=["POST"])
 async def add_api_key():
     encoded = request.json["jwt"]
     decoded = jwt.decode(encoded, os.getenv("JWT_SECRET"), algorithms=["HS256"])
-    conn = psycopg2.connect(database="postgres",
-                        host="34.31.33.98",
-                        user="postgres",
-                        password="IsbgVhMCgVDuV4")
-    cursor = conn.cursor()
+    await prisma.connect()
     keys = []
     try:
-        guid = str(uuid4())
-        cursor.execute(f"INSERT INTO \"ApiKeys\" (guid, \"userId\") VALUES ('{guid}', {decoded['id']})")
-        conn.commit()
-        cursor.execute("SELECT guid FROM \"ApiKeys\" WHERE \"userId\" = " + decoded["id"])
-        keys = cursor.fetchall()
+        await prisma.apikeys.create(
+            data={
+                "guid": str(uuid4()),
+                "userId": decoded["id"]
+            }
+        )
+        keys = await prisma.apikeys.find_many(where={
+            "userId": decoded["id"]
+        })
     finally:
-        conn.close()
+        await prisma.disconnect()
     return dumps({
-        "keys": [key[0] for key in keys]
+        "keys": [key.guid for key  in keys]
     })
 
 @app.route("/delete_api_key", methods=["POST"])
 async def delete_api_key():
     encoded = request.json["jwt"]
     decoded = jwt.decode(encoded, os.getenv("JWT_SECRET"), algorithms=["HS256"])
-    conn = psycopg2.connect(database="postgres",
-                        host="34.31.33.98",
-                        user="postgres",
-                        password="IsbgVhMCgVDuV4")
-    cursor = conn.cursor()
+    await prisma.connect()
     keys = []
     try:
-        cursor.execute("SELECT \"userId\" FROM \"ApiKeys\" WHERE guid = '" + request.json["key"] + "'")
-        uid = cursor.fetchone()[0]
-        decoded["id"] = int(decoded["id"])
-        if (uid == decoded["id"]):
-            cursor.execute("DELETE FROM \"ApiKeys\" WHERE guid = '" + request.json["key"] + "'")
-            conn.commit()
-            cursor.execute("SELECT guid FROM \"ApiKeys\" WHERE \"userId\" = " + str(decoded["id"]))
-            keys = cursor.fetchall()
+        key = await prisma.apikeys.delete(
+            where={
+                "guid": request.json["key"]
+            }
+        )
+
+        if (key.userId == decoded["id"]):
+            await prisma.apikeys.delete(
+                where={
+                    "guid": request.json["key"]
+                }
+            )
+            keys = await prisma.apikeys.find_many(where={
+                "userId": decoded["id"]
+            })
         else:
             return dumps({
                 "error": "Cannot delete key for another user"
-            }), 400
+            })
     finally:
-        conn.close()
+        await prisma.disconnect()
     return dumps({
-        "keys": [key[0] for key  in keys]
+        "keys": [key.guid for key  in keys]
     })
 
 
@@ -173,15 +157,15 @@ def get_intent():
     encoded = request.json["jwt"]
     decoded = jwt.decode(encoded, os.getenv("JWT_SECRET"), algorithms=["HS256"])
     model = Model(request.json["prompt"], model=transformer)
-    out = r.get(model.hash())
-    if out != None:
-        return dumps({
-            "certaintyValue": out
-        })
+    # out = r.get(model.hash())
+    # if out != None:
+    #     return dumps({
+    #         "certaintyValue": out
+    #     })
     out = model()
-    if r.dbsize() >= maxAllowedCache:
-        r.delete(next(r.scan()))
-    r.set(model.hash(), out)
+    # if r.dbsize() >= maxAllowedCache:
+    #     r.delete(next(r.scan()))
+    # r.set(model.hash(), out)
     return dumps({
         "certaintyValue": out
     })
