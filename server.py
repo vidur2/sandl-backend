@@ -73,6 +73,10 @@ async def login():
         return dumps({
             'jwt': encoded
         })
+    elif (user == None):
+        return dumps({
+            'error': 'user not found'
+        }), 400
     else:
         return dumps({
             "error": "password not correct"
